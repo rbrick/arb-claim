@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <link
+      href="https://fonts.googleapis.com/css2?family=Courier+Prime&family=Source+Code+Pro:wght@300&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      body {
+        /* background-color: black; */
+        font-family: "Courier Prime", monospace;
+        /* color: whitesmoke; */
+      }
+
+      .container {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        /* flex-: start; */
+        margin: auto;
+        padding: 50px;
+        width: 60%;
+      }
+
+      li {
+        text-decoration: none;
+        list-style: "- ";
+      }
+
+      a {
+        text-decoration: none;
+        color: whitesmoke;
+      }
+
+      a:hover {
+        text-decoration: underline;
+        color: lightgray;
+      }
+
+      .sidebar {
+        width: 25%;
+
+        flex: none;
+        /* border: 2px solid whitesmoke; */
+      }
+
+      div {
+        flex: content;
+      }
+    </style>
+    <script
+      src="./assets/js/ethers.min.js"
+      type="application/javascript"
+    ></script>
+
+    <script
+      src="./assets/js/contractAbis.js"
+      type="application/javascript"
+    ></script>
+    <script>
+      const SPOT_PRICE_AGGREGATOR_CONTRACT =
+        "0x735247fb0a604c0adC6cab38ACE16D0DbA31295F";
+
+      const ARBITRUM_TOKEN_CONTRACT =
+        "0x912CE59144191C1204E64559FE8253a0e49E6548";
+      const ARBITRUM_TOKEN_DISTRIBUTOR_CONTRACT =
+        "0x67a24CE4321aB3aF51c2D0a4801c3E111D88C9d9";
+
+      const NUMBER_FORMATTER = new Intl.NumberFormat("en-US");
+      const CURRENCY_FORMATTER = new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+      });
+
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+
+      let arbitrumTokenDistributor = new ethers.Contract(
+        ARBITRUM_TOKEN_DISTRIBUTOR_CONTRACT,
+        ArbitrumTokenDistributorABI,
+        provider
+      );
+
+      let arbitrumTokenContractV1 = new ethers.Contract(
+        ARBITRUM_TOKEN_CONTRACT,
+        BytesContractV1ABI,
+        provider
+      );
+
+      let priceAggregator = new ethers.Contract(
+        SPOT_PRICE_AGGREGATOR_CONTRACT,
+        OneInchSpotPriceAggregatorABI,
+        provider
+      );
+
+      const STABLE_COINS = [
+        {
+          address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          decimals: 6,
+        }, // USDC
+        {
+          address: "0xdac17f958d2ee523a2206206994597c13d831ec7",
+          decimals: 6,
+        }, // USDT
+        {
+          address: "0x4fabb145d64652a948d72533023f6e7a623c7c53",
+          decimals: 18,
+        }, // BUSD
+        {
+          address: "0x6b175474e89094c44da98b954eedeac495271d0f",
+          decimals: 18,
+        }, // DAI
+      ];
+
+      async function renderSupplyAndMarketcap() {
+        let totalSupply = await arbitrumTokenContractV1.totalSupply();
+
+        let totalSupplyNum = parseFloat(ethers.utils.formatUnits(totalSupply));
+
+        document.getElementById("totalSupply").textContent =
+          NUMBER_FORMATTER.format(totalSupplyNum);
+
+        let spotPrice = 0.0;
+
+        for (let i = 0; i < STABLE_COINS.length; i++) {
+          let stableCoin = STABLE_COINS[i];
+          // grab the current dex rate
+          let rate = await priceAggregator.getRate(
+            SPOT_PRICE_AGGREGATOR_CONTRACT,
+            stableCoin.address,
+            false
+          );
+
+          spotPrice += parseFloat(
+            ethers.utils.formatUnits(rate, stableCoin.decimals)
+          );
+        }
+
+        spotPrice /= STABLE_COINS.length;
+
+        document.getElementById("spotPrice").textContent =
+          CURRENCY_FORMATTER.format(spotPrice);
+        document.getElementById("marketCap").textContent =
+          CURRENCY_FORMATTER.format(spotPrice * totalSupplyNum);
+      }
+
+      async function renderAmountClaimable() {
+        const signer = provider.getSigner();
+
+        if (signer) {
+          let addr = await signer.getAddress();
+          let amount = await arbitrumTokenDistributor.claimableTokens(addr);
+
+          let claimableTokens = parseFloat(ethers.utils.formatUnits(amount));
+
+          document.getElementById("totalClaimable").textContent =
+            claimableTokens;
+        }
+      }
+
+        renderSupplyAndMarketcap();
+
+      // Update the supply and market cap every 5 minutes
+        setInterval(renderSupplyAndMarketcap, 5 * 60 * 1000);
+      //   setInterval(renderBlink, 500);
+
+      onload = async () => {
+        // MetaMask requires requesting permission to connect users accounts
+        await provider.send("eth_requestAccounts", []);
+
+        renderAmountClaimable();
+
+        document.getElementById("claim").onclick = async (e) => {
+          e.preventDefault();
+          let txn = await arbitrumTokenDistributor.connect(provider.getSigner()).claim();
+        };
+
+
+
+      };
+    </script>
+  </head>
+  <body>
+    <div class="container">
+      <div class="sidebar">
+        <h3 id="title">arbitrum claim</h3>
+      </div>
+      <div>
+        <h3>total supply: <span id="totalSupply"></span></h3>
+        <h3>avg. spot price: <span id="spotPrice"></span></h3>
+        <h3>current market cap: <span id="marketCap"></span></h3>
+
+        <h3>total claimable: <span id="totalClaimable">unknown</span></h3>
+
+        <!-- <input id="address" type="text" placeholder="0x... address" pattern="0x[0-9a-fA-F]{40}" minlength="42" maxlength="42"> -->
+
+        <input id="claim" type="button" value="Claim Tokens" />
+      </div>
+    </div>
+  </body>
+</html>
