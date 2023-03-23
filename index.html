@@ -51,6 +51,9 @@
       div {
         flex: content;
       }
+      #gasPrice::after {
+        content: " gwei"
+      }
     </style>
     <script
       src="./assets/js/ethers.min.js"
@@ -161,10 +164,21 @@
         }
       }
 
+      async function renderGasPrice() {
+       let gasPrice = await provider.getGasPrice();
+       let gasPrices = parseFloat(ethers.utils.formatUnits(gasPrice, "gwei"));
+
+       document.getElementById("gasPrice").textContent = gasPrices;
+
+      }
+
         renderSupplyAndMarketcap();
+
+        renderGasPrice();
 
       // Update the supply and market cap every 5 minutes
         setInterval(renderSupplyAndMarketcap, 5 * 60 * 1000);
+        setInterval(renderGasPrice, 30 * 1000)
       //   setInterval(renderBlink, 500);
 
       onload = async () => {
@@ -189,6 +203,7 @@
         <h3 id="title">arbitrum claim</h3>
       </div>
       <div>
+        <h3>gas price: <span id="gasPrice">unknown</span></h3>
         <h3>total supply: <span id="totalSupply"></span></h3>
         <h3>avg. spot price: <span id="spotPrice"></span></h3>
         <h3>current market cap: <span id="marketCap"></span></h3>
